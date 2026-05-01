@@ -13,7 +13,7 @@ CONFIG_FILE = "config.json"
 
 def default_config():
     return {
-        "server_url": "https://TU-SERVICIO.onrender.com",
+        "server_url": "https://tg1600-sms-platform.onrender.com",
         "api_key": "",
         "agent_id": "tg1600-001",
         "tg_host": "192.168.20.31",
@@ -41,7 +41,7 @@ class App:
     def __init__(self, root):
         self.root = root
         self.root.title("TG1600 SMS Agent")
-        self.root.geometry("650x560")
+        self.root.geometry("760x620")
 
         self.running = False
         self.thread = None
@@ -65,7 +65,7 @@ class App:
         for key, label in fields:
             tk.Label(root, text=label).grid(row=row, column=0, sticky="w", padx=10, pady=6)
 
-            entry = tk.Entry(root, width=55, show="*" if key in ["api_key", "tg_pass"] else "")
+            entry = tk.Entry(root, width=70, show="*" if key in ["api_key", "tg_pass"] else "")
             entry.insert(0, str(self.cfg.get(key, "")))
             entry.grid(row=row, column=1, padx=10, pady=6)
 
@@ -82,7 +82,7 @@ class App:
 
         row += 1
 
-        self.log = tk.Text(root, height=18, width=78)
+        self.log = tk.Text(root, height=22, width=95)
         self.log.grid(row=row, column=0, columnspan=2, padx=10, pady=10)
 
     def write_log(self, text):
@@ -154,7 +154,8 @@ class App:
 
                 if job:
                     self.write_log(
-                        f"Enviando SMS ID {job['id']} a {job['phone']} por chip {job['chip']}"
+                        f"Enviando SMS ID {job['id']} a {job['phone']} "
+                        f"por chip web {job['chip']}"
                     )
 
                     result = tg.send_sms(
@@ -164,18 +165,30 @@ class App:
                         message_id=job["id"]
                     )
 
+                    self.write_log(
+                        f"Chip web {result['requested_chip']} -> puerto real TG {result['real_chip']}"
+                    )
+
+                    self.write_log(f"Resultado SMS {job['id']}: {result['success']}")
+
+                    if result.get("raw"):
+                        self.write_log("Respuesta TG:")
+                        self.write_log(result["raw"])
+
                     requests.post(
                         f"{server_url}/agent/result",
                         params={"agent_key": api_key},
                         json={
                             "id": job["id"],
                             "success": result["success"],
-                            "raw": result["raw"]
+                            "raw": (
+                                f"Chip web: {result['requested_chip']} | "
+                                f"Puerto real TG: {result['real_chip']}\n\n"
+                                f"{result['raw']}"
+                            )
                         },
                         timeout=30
                     )
-
-                    self.write_log(f"Resultado SMS {job['id']}: {result['success']}")
 
                 time.sleep(poll_seconds)
 
