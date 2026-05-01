@@ -31,20 +31,31 @@ class TG1600Client:
         return True
 
     def send_sms(self, chip, to_number, message, message_id):
-        safe_message = urllib.parse.quote(message)
+        # 🔥 AJUSTE CORRECTO SEGÚN TU TG
+        real_chip = int(chip) - 1
 
+        safe_message = urllib.parse.quote(message)
         clean_number = str(to_number).replace("+", "").replace(" ", "")
 
         cmd = (
             "Action: smscommand\r\n"
-            f"command: gsm send sms {chip} {clean_number} \"{safe_message}\" {message_id}\r\n\r\n"
+            f"command: gsm send sms {real_chip} {clean_number} \"{safe_message}\" {message_id}\r\n\r\n"
         )
 
         self.sock.sendall(cmd.encode())
         response = self._read_until_marker("--END SMS EVENT--", timeout=40)
 
+        # 🔥 DETECCIÓN MEJORADA
+        success = False
+        if "Status: 1" in response:
+            success = True
+        elif "Response: Success" in response:
+            success = True
+        elif "OK" in response:
+            success = True
+
         return {
-            "success": "Status: 1" in response,
+            "success": success,
             "raw": response
         }
 
