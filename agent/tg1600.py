@@ -31,8 +31,13 @@ class TG1600Client:
         return True
 
     def send_sms(self, chip, to_number, message, message_id):
-        # 🔥 AJUSTE CORRECTO SEGÚN TU TG
+        # Ajuste según tu TG:
+        # en la web pones 2 y sale por puerto físico 1
+        # en la web pones 3 y sale por puerto físico 2
         real_chip = int(chip) - 1
+
+        if real_chip < 1:
+            real_chip = 1
 
         safe_message = urllib.parse.quote(message)
         clean_number = str(to_number).replace("+", "").replace(" ", "")
@@ -45,8 +50,8 @@ class TG1600Client:
         self.sock.sendall(cmd.encode())
         response = self._read_until_marker("--END SMS EVENT--", timeout=40)
 
-        # 🔥 DETECCIÓN MEJORADA
         success = False
+
         if "Status: 1" in response:
             success = True
         elif "Response: Success" in response:
@@ -56,7 +61,10 @@ class TG1600Client:
 
         return {
             "success": success,
-            "raw": response
+            "raw": response,
+            "command": cmd,
+            "requested_chip": chip,
+            "real_chip": real_chip
         }
 
     def _read_some(self):
