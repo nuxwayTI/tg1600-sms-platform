@@ -26,18 +26,20 @@ class TG1600Client:
         response = self._read_some()
 
         if "Response: Success" not in response:
-            raise Exception(f"TG1600 login failed: {response}")
+            raise Exception(f"TG login failed: {response}")
 
         return True
 
     def send_sms(self, chip, to_number, message, message_id):
-        # Ajuste según tu TG:
-        # en la web pones 2 y sale por puerto físico 1
-        # en la web pones 3 y sale por puerto físico 2
-        real_chip = int(chip) - 1
-
-        if real_chip < 1:
-            real_chip = 1
+        # IMPORTANTE:
+        # NO restar nada aquí.
+        # El TG usa el número que recibe.
+        #
+        # En tu equipo confirmado:
+        # Web chip 2 -> comando TG 2 -> SIM física 1
+        # Web chip 3 -> comando TG 3 -> SIM física 2
+        # Web chip 4 -> comando TG 4 -> SIM física 3
+        real_chip = int(chip)
 
         safe_message = urllib.parse.quote(message)
         clean_number = str(to_number).replace("+", "").replace(" ", "")
