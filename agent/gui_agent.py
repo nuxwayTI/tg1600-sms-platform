@@ -53,11 +53,14 @@ class App:
         header = tk.Frame(root, bg="#0b1020")
         header.pack(fill="x", padx=18, pady=16)
 
+        # Logo reducido
         if os.path.exists("logo.png"):
             try:
-                self.logo_img = tk.PhotoImage(file="logo.png")
-                logo_label = tk.Label(header, image=self.logo_img, bg="#ffffff", padx=8, pady=8)
-                logo_label.pack(side="left", padx=(0, 18))
+                raw_logo = tk.PhotoImage(file="logo.png")
+                self.logo_img = raw_logo.subsample(8, 8)
+                logo_box = tk.Frame(header, bg="#ffffff", padx=8, pady=8)
+                logo_box.pack(side="left", padx=(0, 18))
+                tk.Label(logo_box, image=self.logo_img, bg="#ffffff").pack()
             except Exception:
                 pass
 
@@ -120,7 +123,7 @@ class App:
         tk.Button(buttons, text="Guardar configuración", command=self.save, bg="#f59e0b", fg="#111827").pack(side="left", padx=8)
         tk.Button(buttons, text="Conectar y ejecutar", command=self.start, bg="#2563eb", fg="white").pack(side="left", padx=8)
 
-        self.log = tk.Text(root, height=22, width=105, bg="#030712", fg="#e5e7eb", insertbackground="#f8fafc")
+        self.log = tk.Text(root, height=20, width=105, bg="#030712", fg="#e5e7eb", insertbackground="#f8fafc")
         self.log.pack(padx=18, pady=12)
 
     def write_log(self, text):
