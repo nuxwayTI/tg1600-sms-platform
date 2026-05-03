@@ -41,13 +41,47 @@ class App:
     def __init__(self, root):
         self.root = root
         self.root.title("Nuxway SMS Agent")
-        self.root.geometry("780x620")
+        self.root.geometry("820x680")
+        self.root.configure(bg="#0b1020")
 
         self.running = False
         self.thread = None
         self.cfg = load_config()
-
         self.entries = {}
+        self.logo_img = None
+
+        header = tk.Frame(root, bg="#0b1020")
+        header.pack(fill="x", padx=18, pady=16)
+
+        if os.path.exists("logo.png"):
+            try:
+                self.logo_img = tk.PhotoImage(file="logo.png")
+                logo_label = tk.Label(header, image=self.logo_img, bg="#ffffff", padx=8, pady=8)
+                logo_label.pack(side="left", padx=(0, 18))
+            except Exception:
+                pass
+
+        title_box = tk.Frame(header, bg="#0b1020")
+        title_box.pack(side="left")
+
+        tk.Label(
+            title_box,
+            text="NUXWAY SMS",
+            font=("Arial", 24, "bold"),
+            fg="#f8fafc",
+            bg="#0b1020"
+        ).pack(anchor="w")
+
+        tk.Label(
+            title_box,
+            text="TG Series Local Agent",
+            font=("Arial", 12),
+            fg="#cbd5e1",
+            bg="#0b1020"
+        ).pack(anchor="w")
+
+        form = tk.Frame(root, bg="#111827", padx=16, pady=16)
+        form.pack(fill="x", padx=18, pady=10)
 
         fields = [
             ("server_url", "URL Render"),
@@ -60,30 +94,34 @@ class App:
             ("poll_seconds", "Poll segundos")
         ]
 
-        row = 0
+        for row, (key, label) in enumerate(fields):
+            tk.Label(form, text=label, fg="#e5e7eb", bg="#111827").grid(row=row, column=0, sticky="w", pady=5)
 
-        for key, label in fields:
-            tk.Label(root, text=label).grid(row=row, column=0, sticky="w", padx=10, pady=6)
+            entry = tk.Entry(
+                form,
+                width=72,
+                show="*" if key in ["api_key", "tg_pass"] else "",
+                bg="#0c1220",
+                fg="#f8fafc",
+                insertbackground="#f8fafc"
+            )
 
-            entry = tk.Entry(root, width=70, show="*" if key in ["api_key", "tg_pass"] else "")
             entry.insert(0, str(self.cfg.get(key, "")))
-            entry.grid(row=row, column=1, padx=10, pady=6)
+            entry.grid(row=row, column=1, padx=10, pady=5)
 
             self.entries[key] = entry
-            row += 1
 
-        self.status = tk.Label(root, text="Estado: detenido", fg="red")
-        self.status.grid(row=row, column=0, columnspan=2, pady=10)
+        self.status = tk.Label(root, text="Estado: detenido", fg="#ef4444", bg="#0b1020", font=("Arial", 12, "bold"))
+        self.status.pack(pady=8)
 
-        row += 1
+        buttons = tk.Frame(root, bg="#0b1020")
+        buttons.pack(pady=8)
 
-        tk.Button(root, text="Guardar configuración", command=self.save).grid(row=row, column=0, pady=10)
-        tk.Button(root, text="Conectar y ejecutar", command=self.start).grid(row=row, column=1, pady=10)
+        tk.Button(buttons, text="Guardar configuración", command=self.save, bg="#f59e0b", fg="#111827").pack(side="left", padx=8)
+        tk.Button(buttons, text="Conectar y ejecutar", command=self.start, bg="#2563eb", fg="white").pack(side="left", padx=8)
 
-        row += 1
-
-        self.log = tk.Text(root, height=22, width=98)
-        self.log.grid(row=row, column=0, columnspan=2, padx=10, pady=10)
+        self.log = tk.Text(root, height=22, width=105, bg="#030712", fg="#e5e7eb", insertbackground="#f8fafc")
+        self.log.pack(padx=18, pady=12)
 
     def write_log(self, text):
         self.log.insert(tk.END, text + "\n")
@@ -116,7 +154,7 @@ class App:
             return
 
         self.running = True
-        self.status.config(text="Estado: conectado / ejecutando", fg="green")
+        self.status.config(text="Estado: conectado / ejecutando", fg="#22c55e")
 
         self.thread = threading.Thread(target=self.run_agent, daemon=True)
         self.thread.start()
@@ -192,7 +230,7 @@ class App:
 
         except Exception as e:
             self.running = False
-            self.status.config(text="Estado: error", fg="red")
+            self.status.config(text="Estado: error", fg="#ef4444")
             self.write_log("ERROR: " + str(e))
 
 
