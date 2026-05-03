@@ -1,5 +1,6 @@
 import os
 import io
+import time
 from datetime import datetime
 
 import pandas as pd
@@ -12,10 +13,12 @@ from models import Campaign, SmsMessage
 
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="Nuxway SMS Cloud Platform")
+app = FastAPI(title="Nuxway SMS Platform")
 
 API_KEY = os.getenv("API_KEY", "change-me")
 COUNTRY_CODE = os.getenv("COUNTRY_CODE", "591")
+
+agent_status = {}
 
 if os.path.exists("static"):
     app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -43,9 +46,12 @@ def parse_chips(chips_raw: str):
         item = item.strip()
         if not item:
             continue
+
         chip = int(item)
+
         if chip < 1 or chip > 16:
             raise ValueError("Chip fuera de rango. Use 1 a 16.")
+
         chips.append(chip)
 
     if not chips:
@@ -75,6 +81,42 @@ def read_phones_from_excel(upload: UploadFile):
     return phones
 
 
+def get_agent_panel():
+    now = time.time()
+
+    if not agent_status:
+        return """
+        <div class="agent offline">
+            <span class="dot"></span>
+            <div>
+                <b>Agente local</b><br>
+                <small>Offline - ningún EXE conectado</small>
+            </div>
+        </div>
+        """
+
+    panels = ""
+
+    for agent_id, data in agent_status.items():
+        last_seen = data.get("last_seen", 0)
+        seconds = int(now - last_seen)
+        online = seconds <= 20
+        css = "online" if online else "offline"
+        label = "Activo" if online else "Offline"
+
+        panels += f"""
+        <div class="agent {css}">
+            <span class="dot"></span>
+            <div>
+                <b>{agent_id}</b><br>
+                <small>{label} - último contacto hace {seconds}s</small>
+            </div>
+        </div>
+        """
+
+    return panels
+
+
 def layout(title: str, content: str):
     return f"""
     <html>
@@ -84,128 +126,199 @@ def layout(title: str, content: str):
             body {{
                 margin: 0;
                 font-family: Arial, Helvetica, sans-serif;
-                background: #070b14;
-                color: #e8edf7;
+                background:
+                    radial-gradient(circle at top left, rgba(56,189,248,0.16), transparent 30%),
+                    radial-gradient(circle at top right, rgba(245,158,11,0.12), transparent 28%),
+                    linear-gradient(135deg, #070b14 0%, #0b1020 45%, #111827 100%);
+                color: #f8fafc;
             }}
+
             header {{
-                background: linear-gradient(90deg, #101827, #111b33, #070b14);
-                padding: 22px 36px;
-                border-bottom: 1px solid #25324a;
+                background: rgba(15,23,42,0.90);
+                backdrop-filter: blur(12px);
+                padding: 26px 42px;
+                border-bottom: 1px solid rgba(148,163,184,0.22);
                 display: flex;
                 align-items: center;
-                gap: 22px;
+                gap: 30px;
             }}
+
+            .logo-box {{
+                background: rgba(255,255,255,0.94);
+                padding: 12px;
+                border-radius: 22px;
+                box-shadow: 0 0 40px rgba(245,158,11,0.28);
+            }}
+
             .logo {{
-                width: 95px;
+                width: 108px;
                 height: auto;
+                display: block;
             }}
+
             .title {{
-                font-size: 30px;
-                font-weight: 800;
-                letter-spacing: 1px;
+                font-size: 42px;
+                font-weight: 900;
+                letter-spacing: 5px;
+                color: #f8fafc;
+                text-shadow: 0 0 20px rgba(56,189,248,0.18);
             }}
+
             .subtitle {{
-                color: #9aa8c7;
-                margin-top: 4px;
+                color: #cbd5e1;
+                margin-top: 8px;
+                font-size: 20px;
             }}
+
             main {{
-                padding: 30px 36px;
+                padding: 34px 42px;
             }}
+
             .card {{
-                background: #101827;
-                border: 1px solid #26344f;
-                border-radius: 14px;
-                padding: 18px;
-                margin-bottom: 20px;
-                box-shadow: 0 0 30px rgba(0,0,0,0.25);
+                background: rgba(17,24,39,0.88);
+                border: 1px solid rgba(148,163,184,0.22);
+                border-radius: 20px;
+                padding: 24px;
+                margin-bottom: 24px;
+                box-shadow: 0 22px 55px rgba(0,0,0,0.32);
             }}
+
             .stats {{
                 display: flex;
-                gap: 14px;
+                gap: 16px;
                 flex-wrap: wrap;
             }}
+
             .stat {{
-                background: #0c1220;
-                border: 1px solid #26344f;
-                border-radius: 12px;
-                padding: 14px 18px;
-                min-width: 135px;
+                background: rgba(12,18,32,0.95);
+                border: 1px solid rgba(148,163,184,0.20);
+                border-radius: 16px;
+                padding: 18px 22px;
+                min-width: 145px;
             }}
+
             .stat b {{
                 display: block;
-                font-size: 24px;
-                margin-top: 6px;
+                font-size: 30px;
+                margin-top: 8px;
             }}
-            .sent {{ color: #20d47b; }}
-            .failed {{ color: #ff4d5e; }}
-            .queued {{ color: #ffbf47; }}
-            .processing {{ color: #58a6ff; }}
+
+            .sent {{ color: #22c55e; }}
+            .failed {{ color: #ef4444; }}
+            .queued {{ color: #f59e0b; }}
+            .processing {{ color: #38bdf8; }}
+
             .button {{
-                background: #ff9f1c;
+                background: linear-gradient(135deg, #f59e0b, #f97316);
                 color: #111827;
-                padding: 10px 15px;
+                padding: 11px 18px;
                 text-decoration: none;
-                border-radius: 8px;
-                font-weight: 700;
+                border-radius: 10px;
+                font-weight: 800;
                 border: none;
                 cursor: pointer;
+                box-shadow: 0 8px 18px rgba(245,158,11,0.25);
             }}
+
             .button-secondary {{
-                background: #1f6feb;
+                background: linear-gradient(135deg, #2563eb, #38bdf8);
                 color: white;
             }}
+
             .button-danger {{
-                background: #d7263d;
+                background: linear-gradient(135deg, #dc2626, #ef4444);
                 color: white;
             }}
+
             table {{
                 border-collapse: collapse;
                 width: 100%;
-                background: #0c1220;
-                border-radius: 10px;
+                background: rgba(12,18,32,0.95);
+                border-radius: 12px;
                 overflow: hidden;
             }}
+
             th, td {{
-                border-bottom: 1px solid #25324a;
-                padding: 10px;
+                border-bottom: 1px solid rgba(148,163,184,0.16);
+                padding: 11px;
                 font-size: 13px;
                 vertical-align: top;
             }}
+
             th {{
-                background: #182235;
+                background: rgba(30,41,59,0.95);
                 color: #ffffff;
             }}
+
             tr:hover {{
-                background: #121b2d;
+                background: rgba(30,41,59,0.55);
             }}
+
             input, textarea {{
-                width: 540px;
+                width: 560px;
                 max-width: 95%;
-                padding: 10px;
+                padding: 11px;
                 margin: 8px 0;
                 background: #0c1220;
-                color: #e8edf7;
-                border: 1px solid #31415f;
-                border-radius: 8px;
+                color: #f8fafc;
+                border: 1px solid #334155;
+                border-radius: 10px;
             }}
+
             pre {{
                 white-space: pre-wrap;
                 font-size: 11px;
                 max-height: 130px;
                 overflow: auto;
             }}
+
             .actions {{
                 display: flex;
                 gap: 8px;
                 align-items: center;
             }}
+
+            .agent {{
+                display: inline-flex;
+                gap: 10px;
+                align-items: center;
+                padding: 12px 16px;
+                border-radius: 14px;
+                margin-right: 10px;
+                margin-bottom: 10px;
+                background: rgba(12,18,32,0.96);
+                border: 1px solid rgba(148,163,184,0.20);
+            }}
+
+            .dot {{
+                width: 12px;
+                height: 12px;
+                border-radius: 50%;
+                display: inline-block;
+            }}
+
+            .agent.online .dot {{
+                background: #22c55e;
+                box-shadow: 0 0 15px #22c55e;
+            }}
+
+            .agent.offline .dot {{
+                background: #ef4444;
+                box-shadow: 0 0 15px #ef4444;
+            }}
+
+            .agent small {{
+                color: #cbd5e1;
+            }}
         </style>
     </head>
     <body>
         <header>
-            <img class="logo" src="/static/logo.png" onerror="this.style.display='none'">
+            <div class="logo-box">
+                <img class="logo" src="/static/logo.png" onerror="this.parentElement.style.display='none'">
+            </div>
             <div>
-                <div class="title">NUXWAY SMS CLOUD</div>
+                <div class="title">NUXWAY SMS</div>
                 <div class="subtitle">TG Series Gateway Campaign Platform</div>
             </div>
         </header>
@@ -261,6 +374,11 @@ def dashboard():
     db.close()
 
     content = f"""
+        <div class="card">
+            <h2>Estado del agente local</h2>
+            {get_agent_panel()}
+        </div>
+
         <div class="stats">
             <div class="stat">Total<b>{total}</b></div>
             <div class="stat queued">En cola<b>{queued}</b></div>
@@ -293,7 +411,7 @@ def dashboard():
         </div>
     """
 
-    return layout("Nuxway SMS Cloud", content)
+    return layout("Nuxway SMS", content)
 
 
 @app.get("/campaigns/new", response_class=HTMLResponse)
@@ -506,6 +624,10 @@ def agent_poll(agent_id: str, agent_key: str):
     if agent_key != API_KEY:
         raise HTTPException(status_code=401, detail="Invalid agent key")
 
+    agent_status[agent_id] = {
+        "last_seen": time.time()
+    }
+
     db = SessionLocal()
 
     msg = (
@@ -581,5 +703,6 @@ def health():
         "queued": queued,
         "processing": processing,
         "sent": sent,
-        "failed": failed
+        "failed": failed,
+        "agents": agent_status
     }
