@@ -31,14 +31,6 @@ class TG1600Client:
         return True
 
     def send_sms(self, chip, to_number, message, message_id):
-        # IMPORTANTE:
-        # NO restar nada aquí.
-        # El TG usa el número que recibe.
-        #
-        # En tu equipo confirmado:
-        # Web chip 2 -> comando TG 2 -> SIM física 1
-        # Web chip 3 -> comando TG 3 -> SIM física 2
-        # Web chip 4 -> comando TG 4 -> SIM física 3
         real_chip = int(chip)
 
         safe_message = urllib.parse.quote(message)
