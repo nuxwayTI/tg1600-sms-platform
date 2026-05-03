@@ -1,14 +1,23 @@
 import json
 import os
+import sys
 import threading
 import time
 import tkinter as tk
 from tkinter import messagebox
+
 import requests
+from PIL import Image, ImageTk
 
 from tg1600 import TG1600Client
 
 CONFIG_FILE = "config.json"
+
+
+def resource_path(relative_path):
+    if hasattr(sys, "_MEIPASS"):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.abspath("."), relative_path)
 
 
 def default_config():
@@ -53,16 +62,20 @@ class App:
         header = tk.Frame(root, bg="#0b1020")
         header.pack(fill="x", padx=18, pady=16)
 
-        # Logo reducido
-        if os.path.exists("logo.png"):
+        logo_path = resource_path("logo.png")
+
+        if os.path.exists(logo_path):
             try:
-                raw_logo = tk.PhotoImage(file="logo.png")
-                self.logo_img = raw_logo.subsample(8, 8)
+                img = Image.open(logo_path)
+                img = img.resize((150, 150), Image.LANCZOS)
+                self.logo_img = ImageTk.PhotoImage(img)
+
                 logo_box = tk.Frame(header, bg="#ffffff", padx=8, pady=8)
-                logo_box.pack(side="left", padx=(0, 18))
+                logo_box.pack(side="left", padx=(0, 22))
+
                 tk.Label(logo_box, image=self.logo_img, bg="#ffffff").pack()
-            except Exception:
-                pass
+            except Exception as e:
+                print("Error cargando logo:", e)
 
         title_box = tk.Frame(header, bg="#0b1020")
         title_box.pack(side="left")
@@ -70,7 +83,7 @@ class App:
         tk.Label(
             title_box,
             text="NUXWAY SMS",
-            font=("Arial", 24, "bold"),
+            font=("Arial", 26, "bold"),
             fg="#f8fafc",
             bg="#0b1020"
         ).pack(anchor="w")
@@ -78,7 +91,7 @@ class App:
         tk.Label(
             title_box,
             text="TG Series Local Agent",
-            font=("Arial", 12),
+            font=("Arial", 13),
             fg="#cbd5e1",
             bg="#0b1020"
         ).pack(anchor="w")
@@ -98,7 +111,13 @@ class App:
         ]
 
         for row, (key, label) in enumerate(fields):
-            tk.Label(form, text=label, fg="#e5e7eb", bg="#111827").grid(row=row, column=0, sticky="w", pady=5)
+            tk.Label(
+                form,
+                text=label,
+                fg="#e5e7eb",
+                bg="#111827",
+                font=("Arial", 10, "bold")
+            ).grid(row=row, column=0, sticky="w", pady=5)
 
             entry = tk.Entry(
                 form,
@@ -106,7 +125,9 @@ class App:
                 show="*" if key in ["api_key", "tg_pass"] else "",
                 bg="#0c1220",
                 fg="#f8fafc",
-                insertbackground="#f8fafc"
+                insertbackground="#f8fafc",
+                relief="solid",
+                bd=1
             )
 
             entry.insert(0, str(self.cfg.get(key, "")))
@@ -114,16 +135,50 @@ class App:
 
             self.entries[key] = entry
 
-        self.status = tk.Label(root, text="Estado: detenido", fg="#ef4444", bg="#0b1020", font=("Arial", 12, "bold"))
+        self.status = tk.Label(
+            root,
+            text="Estado: detenido",
+            fg="#ef4444",
+            bg="#0b1020",
+            font=("Arial", 12, "bold")
+        )
         self.status.pack(pady=8)
 
         buttons = tk.Frame(root, bg="#0b1020")
         buttons.pack(pady=8)
 
-        tk.Button(buttons, text="Guardar configuración", command=self.save, bg="#f59e0b", fg="#111827").pack(side="left", padx=8)
-        tk.Button(buttons, text="Conectar y ejecutar", command=self.start, bg="#2563eb", fg="white").pack(side="left", padx=8)
+        tk.Button(
+            buttons,
+            text="Guardar configuración",
+            command=self.save,
+            bg="#f59e0b",
+            fg="#111827",
+            font=("Arial", 10, "bold"),
+            padx=10,
+            pady=5
+        ).pack(side="left", padx=8)
 
-        self.log = tk.Text(root, height=20, width=105, bg="#030712", fg="#e5e7eb", insertbackground="#f8fafc")
+        tk.Button(
+            buttons,
+            text="Conectar y ejecutar",
+            command=self.start,
+            bg="#2563eb",
+            fg="white",
+            font=("Arial", 10, "bold"),
+            padx=10,
+            pady=5
+        ).pack(side="left", padx=8)
+
+        self.log = tk.Text(
+            root,
+            height=20,
+            width=105,
+            bg="#030712",
+            fg="#e5e7eb",
+            insertbackground="#f8fafc",
+            relief="solid",
+            bd=1
+        )
         self.log.pack(padx=18, pady=12)
 
     def write_log(self, text):
