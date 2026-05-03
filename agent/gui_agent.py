@@ -20,7 +20,7 @@ def default_config():
         "tg_port": 5038,
         "tg_user": "apiuser",
         "tg_pass": "apipass",
-        "poll_seconds": 5
+        "poll_seconds": 1.0
     }
 
 
@@ -40,8 +40,8 @@ def save_config(cfg):
 class App:
     def __init__(self, root):
         self.root = root
-        self.root.title("TG1600 SMS Agent")
-        self.root.geometry("760x620")
+        self.root.title("Nuxway SMS Agent")
+        self.root.geometry("780x620")
 
         self.running = False
         self.thread = None
@@ -53,10 +53,10 @@ class App:
             ("server_url", "URL Render"),
             ("api_key", "API Key"),
             ("agent_id", "Agent ID"),
-            ("tg_host", "IP TG1600"),
-            ("tg_port", "Puerto TG1600"),
-            ("tg_user", "Usuario TG1600"),
-            ("tg_pass", "Password TG1600"),
+            ("tg_host", "IP TG"),
+            ("tg_port", "Puerto TG"),
+            ("tg_user", "Usuario TG"),
+            ("tg_pass", "Password TG"),
             ("poll_seconds", "Poll segundos")
         ]
 
@@ -82,7 +82,7 @@ class App:
 
         row += 1
 
-        self.log = tk.Text(root, height=22, width=95)
+        self.log = tk.Text(root, height=22, width=98)
         self.log.grid(row=row, column=0, columnspan=2, padx=10, pady=10)
 
     def write_log(self, text):
@@ -95,8 +95,11 @@ class App:
         for key, entry in self.entries.items():
             value = entry.get().strip()
 
-            if key in ["tg_port", "poll_seconds"]:
+            if key == "tg_port":
                 value = int(value)
+
+            if key == "poll_seconds":
+                value = float(value)
 
             cfg[key] = value
 
@@ -122,7 +125,7 @@ class App:
         cfg = self.cfg
 
         try:
-            self.write_log("Conectando al TG1600...")
+            self.write_log("Conectando al TG...")
 
             tg = TG1600Client(
                 host=cfg["tg_host"],
@@ -132,12 +135,12 @@ class App:
             )
 
             tg.connect()
-            self.write_log("TG1600 conectado correctamente.")
+            self.write_log("TG conectado correctamente.")
 
             server_url = cfg["server_url"].rstrip("/")
             api_key = cfg["api_key"]
             agent_id = cfg["agent_id"]
-            poll_seconds = cfg["poll_seconds"]
+            poll_seconds = float(cfg["poll_seconds"])
 
             while self.running:
                 response = requests.get(
@@ -154,8 +157,7 @@ class App:
 
                 if job:
                     self.write_log(
-                        f"Enviando SMS ID {job['id']} a {job['phone']} "
-                        f"por chip web {job['chip']}"
+                        f"Enviando SMS ID {job['id']} a {job['phone']} por chip {job['chip']}"
                     )
 
                     result = tg.send_sms(
@@ -166,14 +168,10 @@ class App:
                     )
 
                     self.write_log(
-                        f"Chip web {result['requested_chip']} -> puerto real TG {result['real_chip']}"
+                        f"Chip web {result['requested_chip']} -> puerto TG {result['real_chip']}"
                     )
 
                     self.write_log(f"Resultado SMS {job['id']}: {result['success']}")
-
-                    if result.get("raw"):
-                        self.write_log("Respuesta TG:")
-                        self.write_log(result["raw"])
 
                     requests.post(
                         f"{server_url}/agent/result",
@@ -183,7 +181,7 @@ class App:
                             "success": result["success"],
                             "raw": (
                                 f"Chip web: {result['requested_chip']} | "
-                                f"Puerto real TG: {result['real_chip']}\n\n"
+                                f"Puerto TG: {result['real_chip']}\n\n"
                                 f"{result['raw']}"
                             )
                         },
