@@ -1,21 +1,24 @@
 import os
 import io
 from datetime import datetime
-from typing import Optional
 
 import pandas as pd
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 
 from database import Base, engine, SessionLocal
 from models import Campaign, SmsMessage
 
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="TG1600 SMS Platform")
+app = FastAPI(title="Nuxway SMS Cloud Platform")
 
 API_KEY = os.getenv("API_KEY", "change-me")
 COUNTRY_CODE = os.getenv("COUNTRY_CODE", "591")
+
+if os.path.exists("static"):
+    app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
 def normalize_phone(phone: str) -> str:
@@ -36,17 +39,13 @@ def normalize_phone(phone: str) -> str:
 
 def parse_chips(chips_raw: str):
     chips = []
-
     for item in chips_raw.split(","):
         item = item.strip()
         if not item:
             continue
-
         chip = int(item)
-
         if chip < 1 or chip > 16:
             raise ValueError("Chip fuera de rango. Use 1 a 16.")
-
         chips.append(chip)
 
     if not chips:
@@ -76,6 +75,148 @@ def read_phones_from_excel(upload: UploadFile):
     return phones
 
 
+def layout(title: str, content: str):
+    return f"""
+    <html>
+    <head>
+        <title>{title}</title>
+        <style>
+            body {{
+                margin: 0;
+                font-family: Arial, Helvetica, sans-serif;
+                background: #070b14;
+                color: #e8edf7;
+            }}
+            header {{
+                background: linear-gradient(90deg, #101827, #111b33, #070b14);
+                padding: 22px 36px;
+                border-bottom: 1px solid #25324a;
+                display: flex;
+                align-items: center;
+                gap: 22px;
+            }}
+            .logo {{
+                width: 95px;
+                height: auto;
+            }}
+            .title {{
+                font-size: 30px;
+                font-weight: 800;
+                letter-spacing: 1px;
+            }}
+            .subtitle {{
+                color: #9aa8c7;
+                margin-top: 4px;
+            }}
+            main {{
+                padding: 30px 36px;
+            }}
+            .card {{
+                background: #101827;
+                border: 1px solid #26344f;
+                border-radius: 14px;
+                padding: 18px;
+                margin-bottom: 20px;
+                box-shadow: 0 0 30px rgba(0,0,0,0.25);
+            }}
+            .stats {{
+                display: flex;
+                gap: 14px;
+                flex-wrap: wrap;
+            }}
+            .stat {{
+                background: #0c1220;
+                border: 1px solid #26344f;
+                border-radius: 12px;
+                padding: 14px 18px;
+                min-width: 135px;
+            }}
+            .stat b {{
+                display: block;
+                font-size: 24px;
+                margin-top: 6px;
+            }}
+            .sent {{ color: #20d47b; }}
+            .failed {{ color: #ff4d5e; }}
+            .queued {{ color: #ffbf47; }}
+            .processing {{ color: #58a6ff; }}
+            .button {{
+                background: #ff9f1c;
+                color: #111827;
+                padding: 10px 15px;
+                text-decoration: none;
+                border-radius: 8px;
+                font-weight: 700;
+                border: none;
+                cursor: pointer;
+            }}
+            .button-secondary {{
+                background: #1f6feb;
+                color: white;
+            }}
+            .button-danger {{
+                background: #d7263d;
+                color: white;
+            }}
+            table {{
+                border-collapse: collapse;
+                width: 100%;
+                background: #0c1220;
+                border-radius: 10px;
+                overflow: hidden;
+            }}
+            th, td {{
+                border-bottom: 1px solid #25324a;
+                padding: 10px;
+                font-size: 13px;
+                vertical-align: top;
+            }}
+            th {{
+                background: #182235;
+                color: #ffffff;
+            }}
+            tr:hover {{
+                background: #121b2d;
+            }}
+            input, textarea {{
+                width: 540px;
+                max-width: 95%;
+                padding: 10px;
+                margin: 8px 0;
+                background: #0c1220;
+                color: #e8edf7;
+                border: 1px solid #31415f;
+                border-radius: 8px;
+            }}
+            pre {{
+                white-space: pre-wrap;
+                font-size: 11px;
+                max-height: 130px;
+                overflow: auto;
+            }}
+            .actions {{
+                display: flex;
+                gap: 8px;
+                align-items: center;
+            }}
+        </style>
+    </head>
+    <body>
+        <header>
+            <img class="logo" src="/static/logo.png" onerror="this.style.display='none'">
+            <div>
+                <div class="title">NUXWAY SMS CLOUD</div>
+                <div class="subtitle">TG Series Gateway Campaign Platform</div>
+            </div>
+        </header>
+        <main>
+            {content}
+        </main>
+    </body>
+    </html>
+    """
+
+
 @app.get("/", response_class=HTMLResponse)
 def dashboard():
     db = SessionLocal()
@@ -86,23 +227,14 @@ def dashboard():
     sent = db.query(SmsMessage).filter(SmsMessage.status == "sent").count()
     failed = db.query(SmsMessage).filter(SmsMessage.status == "failed").count()
 
-    campaigns = db.query(Campaign).order_by(Campaign.id.desc()).limit(30).all()
+    campaigns = db.query(Campaign).order_by(Campaign.id.desc()).limit(50).all()
 
     rows = ""
     for c in campaigns:
         campaign_total = db.query(SmsMessage).filter(SmsMessage.campaign_id == c.id).count()
-        campaign_sent = db.query(SmsMessage).filter(
-            SmsMessage.campaign_id == c.id,
-            SmsMessage.status == "sent"
-        ).count()
-        campaign_failed = db.query(SmsMessage).filter(
-            SmsMessage.campaign_id == c.id,
-            SmsMessage.status == "failed"
-        ).count()
-        campaign_queued = db.query(SmsMessage).filter(
-            SmsMessage.campaign_id == c.id,
-            SmsMessage.status == "queued"
-        ).count()
+        campaign_sent = db.query(SmsMessage).filter(SmsMessage.campaign_id == c.id, SmsMessage.status == "sent").count()
+        campaign_failed = db.query(SmsMessage).filter(SmsMessage.campaign_id == c.id, SmsMessage.status == "failed").count()
+        campaign_queued = db.query(SmsMessage).filter(SmsMessage.campaign_id == c.id, SmsMessage.status == "queued").count()
 
         rows += f"""
         <tr>
@@ -111,90 +243,69 @@ def dashboard():
             <td>{c.chips}</td>
             <td>{c.status}</td>
             <td>{campaign_total}</td>
-            <td>{campaign_queued}</td>
-            <td>{campaign_sent}</td>
-            <td>{campaign_failed}</td>
+            <td class="queued">{campaign_queued}</td>
+            <td class="sent">{campaign_sent}</td>
+            <td class="failed">{campaign_failed}</td>
             <td>{c.created_at}</td>
-            <td><a href="/campaigns/{c.id}">Ver resultados</a></td>
+            <td>
+                <div class="actions">
+                    <a class="button button-secondary" href="/campaigns/{c.id}">Ver</a>
+                    <form method="post" action="/campaigns/{c.id}/delete" onsubmit="return confirm('¿Eliminar campaña y todos sus mensajes?');">
+                        <button class="button button-danger" type="submit">Eliminar</button>
+                    </form>
+                </div>
+            </td>
         </tr>
         """
 
     db.close()
 
-    return f"""
-    <html>
-    <head>
-        <title>TG1600 SMS Platform</title>
-        <style>
-            body {{ font-family: Arial; margin: 30px; }}
-            .card {{ border:1px solid #ddd; padding:15px; margin:10px 0; border-radius:8px; }}
-            table {{ border-collapse: collapse; width:100%; }}
-            th, td {{ border:1px solid #ddd; padding:8px; font-size:13px; }}
-            th {{ background:#f2f2f2; }}
-            a.button {{ background:#1a73e8; color:white; padding:10px 15px; text-decoration:none; border-radius:6px; }}
-            .sent {{ color: green; font-weight: bold; }}
-            .failed {{ color: red; font-weight: bold; }}
-            .queued {{ color: orange; font-weight: bold; }}
-            .processing {{ color: blue; font-weight: bold; }}
-        </style>
-    </head>
-    <body>
-        <h1>TG1600 SMS Platform</h1>
-
-        <div class="card">
-            <b>Total:</b> {total} |
-            <b>En cola:</b> {queued} |
-            <b>Procesando:</b> {processing} |
-            <b class="sent">Enviados:</b> {sent} |
-            <b class="failed">Fallidos:</b> {failed}
+    content = f"""
+        <div class="stats">
+            <div class="stat">Total<b>{total}</b></div>
+            <div class="stat queued">En cola<b>{queued}</b></div>
+            <div class="stat processing">Procesando<b>{processing}</b></div>
+            <div class="stat sent">Enviados<b>{sent}</b></div>
+            <div class="stat failed">Fallidos<b>{failed}</b></div>
         </div>
+
+        <br>
 
         <p><a class="button" href="/campaigns/new">Nueva campaña</a></p>
 
-        <h2>Campañas</h2>
-        <table>
-            <tr>
-                <th>ID</th>
-                <th>Nombre</th>
-                <th>Chips</th>
-                <th>Estado</th>
-                <th>Total</th>
-                <th>Cola</th>
-                <th>Enviados</th>
-                <th>Fallidos</th>
-                <th>Fecha</th>
-                <th>Acción</th>
-            </tr>
-            {rows}
-        </table>
-    </body>
-    </html>
+        <div class="card">
+            <h2>Campañas</h2>
+            <table>
+                <tr>
+                    <th>ID</th>
+                    <th>Nombre</th>
+                    <th>Chips</th>
+                    <th>Estado</th>
+                    <th>Total</th>
+                    <th>Cola</th>
+                    <th>Enviados</th>
+                    <th>Fallidos</th>
+                    <th>Fecha</th>
+                    <th>Acción</th>
+                </tr>
+                {rows}
+            </table>
+        </div>
     """
+
+    return layout("Nuxway SMS Cloud", content)
 
 
 @app.get("/campaigns/new", response_class=HTMLResponse)
 def new_campaign():
-    return """
-    <html>
-    <head>
-        <title>Nueva campaña</title>
-        <style>
-            body { font-family: Arial; margin: 30px; }
-            input, textarea { width: 500px; padding: 8px; margin: 6px 0; }
-            button { padding:10px 15px; }
-            .note { background:#fff8d6; padding:12px; border:1px solid #e8d36c; width:520px; }
-        </style>
-    </head>
-    <body>
+    content = """
+    <div class="card">
         <h1>Nueva campaña SMS</h1>
 
-        <div class="note">
-            <b>Importante:</b><br>
-            El Excel debe tener los teléfonos en la primera columna.<br>
-            En "Chips a usar", escribe ranuras separadas por coma. Ejemplo: 2,3
-        </div>
-
-        <br>
+        <p>
+            El Excel debe tener los teléfonos en la primera columna.
+            En chips usa los puertos del TG, por ejemplo: <b>2,3</b>.
+        </p>
 
         <form action="/campaigns/create" method="post" enctype="multipart/form-data">
             <label>Nombre campaña</label><br>
@@ -206,16 +317,16 @@ def new_campaign():
             <label>Chips a usar. Ejemplo: 2,3</label><br>
             <input name="chips" value="2" required><br>
 
-            <label>Excel/CSV con teléfonos en la primera columna</label><br>
+            <label>Excel/CSV con teléfonos en primera columna</label><br>
             <input type="file" name="file" required><br><br>
 
-            <button type="submit">Crear campaña</button>
+            <button class="button" type="submit">Crear campaña</button>
         </form>
 
         <p><a href="/">Volver</a></p>
-    </body>
-    </html>
+    </div>
     """
+    return layout("Nueva campaña", content)
 
 
 @app.post("/campaigns/create")
@@ -290,13 +401,12 @@ def campaign_detail(campaign_id: int):
         db.query(SmsMessage)
         .filter(SmsMessage.campaign_id == campaign_id)
         .order_by(SmsMessage.id.desc())
-        .limit(300)
+        .limit(500)
         .all()
     )
 
     rows = ""
     for m in messages:
-        status_class = m.status
         result_short = (m.result or "").replace("<", "").replace(">", "")
         if len(result_short) > 300:
             result_short = result_short[:300] + "..."
@@ -306,7 +416,7 @@ def campaign_detail(campaign_id: int):
             <td>{m.id}</td>
             <td>{m.phone}</td>
             <td>{m.chip}</td>
-            <td class="{status_class}">{m.status}</td>
+            <td class="{m.status}">{m.status}</td>
             <td>{m.created_at}</td>
             <td>{m.sent_at or ""}</td>
             <td><pre>{result_short}</pre></td>
@@ -315,43 +425,30 @@ def campaign_detail(campaign_id: int):
 
     db.close()
 
-    return f"""
-    <html>
-    <head>
-        <title>Campaña {campaign.id}</title>
-        <meta http-equiv="refresh" content="10">
-        <style>
-            body {{ font-family: Arial; margin: 30px; }}
-            table {{ border-collapse: collapse; width:100%; }}
-            th, td {{ border:1px solid #ddd; padding:8px; font-size:13px; vertical-align: top; }}
-            th {{ background:#f2f2f2; }}
-            pre {{ white-space: pre-wrap; font-size:11px; max-height:120px; overflow:auto; }}
-            .sent {{ color: green; font-weight: bold; }}
-            .failed {{ color: red; font-weight: bold; }}
-            .queued {{ color: orange; font-weight: bold; }}
-            .processing {{ color: blue; font-weight: bold; }}
-        </style>
-    </head>
-    <body>
+    content = f"""
+    <div class="card">
         <h1>{campaign.name}</h1>
-
         <p><b>Chips:</b> {campaign.chips}</p>
         <p><b>Mensaje:</b> {campaign.message_text}</p>
 
+        <div class="stats">
+            <div class="stat">Total<b>{total}</b></div>
+            <div class="stat queued">Cola<b>{queued}</b></div>
+            <div class="stat processing">Procesando<b>{processing}</b></div>
+            <div class="stat sent">Enviados<b>{sent}</b></div>
+            <div class="stat failed">Fallidos<b>{failed}</b></div>
+        </div>
+
+        <br>
+
+        <p>
+            <a class="button button-secondary" href="/">Volver</a>
+            <a class="button" href="/campaigns/{campaign.id}/retry-failed">Reintentar fallidos</a>
+        </p>
+    </div>
+
+    <div class="card">
         <h2>Resultados</h2>
-        <p>
-            Total: {total} |
-            En cola: {queued} |
-            Procesando: {processing} |
-            <span class="sent">Enviados: {sent}</span> |
-            <span class="failed">Fallidos: {failed}</span>
-        </p>
-
-        <p>
-            <a href="/">Volver</a> |
-            <a href="/campaigns/{campaign.id}/retry-failed">Reintentar fallidos</a>
-        </p>
-
         <table>
             <tr>
                 <th>ID</th>
@@ -364,9 +461,23 @@ def campaign_detail(campaign_id: int):
             </tr>
             {rows}
         </table>
-    </body>
-    </html>
+    </div>
     """
+
+    return layout(f"Campaña {campaign.id}", content)
+
+
+@app.post("/campaigns/{campaign_id}/delete")
+def delete_campaign(campaign_id: int):
+    db = SessionLocal()
+
+    db.query(SmsMessage).filter(SmsMessage.campaign_id == campaign_id).delete()
+    db.query(Campaign).filter(Campaign.id == campaign_id).delete()
+
+    db.commit()
+    db.close()
+
+    return RedirectResponse(url="/", status_code=303)
 
 
 @app.get("/campaigns/{campaign_id}/retry-failed")
@@ -450,15 +561,6 @@ async def agent_result(request: Request, agent_key: str):
     db.close()
 
     return {"ok": True}
-
-
-@app.post("/agent/inbound")
-async def agent_inbound(request: Request, agent_key: str):
-    if agent_key != API_KEY:
-        raise HTTPException(status_code=401, detail="Invalid agent key")
-
-    data = await request.json()
-    return {"ok": True, "received": data}
 
 
 @app.get("/health")
